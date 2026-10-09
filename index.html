@@ -7,6 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>GTA 導航</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Noto+Sans+TC:wght@500;700;900&display=swap">
 <style>
@@ -52,25 +53,27 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--gold);outline-o
 /* radar */
 #radarBox{flex:1;min-height:0;width:100%;display:flex;align-items:center;justify-content:center}
 #radarWrap{position:relative;width:min(92vw,52vh,480px);aspect-ratio:1;max-width:100%;border-radius:50%;
-  overflow:hidden;background:#1c2a26;box-shadow:0 0 0 5px #000,0 0 0 7px rgba(255,255,255,.08),0 18px 40px rgba(0,0,0,.6);cursor:pointer}
+  overflow:hidden;background:#5b4d40;box-shadow:0 0 0 3px #000,0 18px 40px rgba(0,0,0,.6);cursor:pointer}
 #radarRot{position:absolute;width:150%;height:150%;left:-25%;top:-25%;will-change:transform}
-#radar{position:absolute;inset:0;background:#1c2a26}
-#radar .leaflet-tile-pane{filter:invert(1) grayscale(1) contrast(1.6) brightness(.75) sepia(.35) hue-rotate(90deg) saturate(.8)}
-#full .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.9) contrast(.95) saturate(.55)}
+#radar{position:absolute;inset:0;background:#5b4d40}
+#radar.raster .leaflet-tile-pane{filter:grayscale(1) sepia(.6) brightness(.62) contrast(1.25)}
+#full.raster .leaflet-tile-pane{filter:grayscale(1) sepia(.6) brightness(.62) contrast(1.25)}
+#ring{position:absolute;inset:0;width:100%;height:100%;z-index:499;pointer-events:none}
+#ring path,#ring circle{fill:none}
 #radarWrap::after{content:"";position:absolute;inset:0;border-radius:50%;pointer-events:none;
-  background:radial-gradient(circle,transparent 62%,rgba(0,0,0,.45) 100%)}
+  background:radial-gradient(circle,transparent 70%,rgba(0,0,0,.35) 100%)}
 #player{position:absolute;left:50%;top:50%;width:30px;height:34px;transform:translate(-50%,-55%);z-index:500;pointer-events:none;filter:drop-shadow(0 1px 2px #000)}
 #north,#wpBlip{position:absolute;z-index:501;pointer-events:none;transform:translate(-50%,-50%)}
 #north{width:22px;height:22px;border-radius:50%;background:#000;color:#fff;font:700 12px/22px var(--ui);text-align:center;border:1.5px solid #fff}
 #wpBlip{width:20px;height:20px;display:none}
-#radarAttr{position:absolute;bottom:10%;left:0;right:0;text-align:center;font-size:9px;color:rgba(255,255,255,.45);z-index:502;pointer-events:none}
+#radarAttr{position:absolute;bottom:13%;left:0;right:0;text-align:center;font-size:9px;color:rgba(255,255,255,.45);z-index:502;pointer-events:none}
 
 /* bars */
 #bars{width:min(92vw,480px);display:grid;grid-template-columns:3fr 2fr;gap:6px}
 .bar{height:9px;background:rgba(0,0,0,.7);border:1.5px solid #000;position:relative}
 .bar i{position:absolute;inset:0 auto 0 0;width:0;transition:width .4s}
 #barHp i{background:var(--hp)} #barAr i{background:var(--armor)}
-#barLbl{width:min(92vw,480px);display:flex;justify-content:space-between;font-size:11px;color:var(--muted);letter-spacing:.08em;margin-top:-6px;font-variant-numeric:tabular-nums}
+#barLbl{width:min(92vw,480px);display:flex;justify-content:space-between;font-size:11px;color:var(--muted);letter-spacing:.08em;font-variant-numeric:tabular-nums}
 
 /* controls */
 #ctrl{width:100%;max-width:520px;display:grid;grid-template-columns:1.2fr 1fr 1fr 1fr;gap:8px}
@@ -103,7 +106,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--gold);outline-o
 #results{display:flex;flex-direction:column;max-height:40vh;overflow:auto}
 #results button{text-align:left;background:#101418;border:0;border-bottom:1px solid #20262b;padding:10px 12px;font-size:14px}
 #results button small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
-#full{flex:1;background:#0e1114}
+#full{flex:1;background:#5b4d40}
 #pauseBot{display:grid;grid-template-columns:1fr 1fr 1.4fr;gap:8px;padding:10px 16px calc(env(safe-area-inset-bottom,0px) + 12px);background:#000}
 .leaflet-container{font-family:var(--ui)}
 .leaflet-control-attribution{background:rgba(0,0,0,.6)!important;color:#999!important}
@@ -142,12 +145,17 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--gold);outline-o
       <svg id="player" viewBox="0 0 30 34" aria-hidden="true"><path d="M15 2 L28 31 L15 24 L2 31 Z" fill="#fff" stroke="#000" stroke-width="2" stroke-linejoin="round"/></svg>
       <div id="north">N</div>
       <svg id="wpBlip" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 1 L19 10 L10 19 L1 10 Z" fill="#b45cff" stroke="#000" stroke-width="2"/></svg>
-      <div id="radarAttr">© OpenStreetMap</div>
+      <svg id="ring" viewBox="0 0 100 100" aria-hidden="true">
+        <circle cx="50" cy="50" r="46.6" stroke="#000" stroke-width="7.4"/>
+        <circle cx="50" cy="50" r="46.6" stroke="#1d2a24" stroke-width="5"/>
+        <path id="ringHp" d="M50,96.6 A46.6,46.6 0 0 1 50,3.4" pathLength="100" stroke="#4fbd5a" stroke-width="5" stroke-dasharray="0 100"/>
+        <path id="ringAr" d="M50,96.6 A46.6,46.6 0 0 0 50,3.4" pathLength="100" stroke="#3d8fe0" stroke-width="5" stroke-dasharray="0 100"/>
+      </svg>
+      <div id="radarAttr">© OpenStreetMap · OpenFreeMap</div>
     </div>
   </div>
 
-  <div id="bars"><div class="bar" id="barHp"><i></i></div><div class="bar" id="barAr"><i></i></div></div>
-  <div id="barLbl"><span id="progLbl">進度 0%</span><span id="spdLbl">0 km/h</span></div>
+  <div id="barLbl"><span id="progLbl"><i style="color:var(--hp);font-style:normal">●</i> 進度 0%</span><span id="spdLbl">0 km/h</span></div>
 
   <div id="ctrl">
     <button class="btn" id="bMap">地圖</button>
@@ -181,6 +189,8 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--gold);outline-o
 <div id="mission"><b>MISSION PASSED</b><span>已抵達目的地</span></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.1.4/leaflet-maplibre-gl.js"></script>
 <script>
 (() => {
 if (typeof L === 'undefined') {
@@ -228,11 +238,64 @@ const fmtDist = m => m >= 1000 ? (m/1000).toFixed(m >= 10000 ? 0 : 1) + ' km' : 
 const radar = L.map('radar', {zoomControl:false, attributionControl:false, dragging:false, touchZoom:false,
   scrollWheelZoom:false, doubleClickZoom:false, boxZoom:false, keyboard:false, tap:false,
   fadeAnimation:false, zoomAnimation:false, markerZoomAnimation:false}).setView(pos, MODES[mode].zoom);
-L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19}).on('tileerror', () => { if (!window._tileWarned) { window._tileWarned = 1; toast('地圖圖磚載入失敗：請用 Safari 開 https 網址，不要在 App 預覽裡開', 5000); } }).addTo(radar);
-
 const full = L.map('full', {zoomControl:false}).setView(pos, 14);
-L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-  {maxZoom:19, attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · 路線 FOSSGIS OSRM'}).addTo(full);
+const ATTR = '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · <a href="https://openfreemap.org">OpenFreeMap</a> · 路線 FOSSGIS OSRM';
+
+/* San Andreas–style radar palette: brown-grey land, pale flat roads, muted water, no outlines */
+function saStyle(labels) {
+  const C = {land:'#5b4d40', urban:'#54473a', green:'#4e5838', water:'#5a7891', bld:'#4b3f34',
+             minor:'#b8b0a3', major:'#d6d0c5', motor:'#ebe6dd', rail:'#463b31'};
+  const w = (a, b) => ['interpolate', ['exponential', 1.5], ['zoom'], 10, a, 18, b];
+  const cls = (...c) => ['match', ['get', 'class'], c, true, false];
+  const layers = [
+    {id:'bg', type:'background', paint:{'background-color':C.land}},
+    {id:'landuse', type:'fill', source:'om', 'source-layer':'landuse',
+      filter:cls('residential','commercial','industrial','retail','railway'), paint:{'fill-color':C.urban}},
+    {id:'green', type:'fill', source:'om', 'source-layer':'landcover',
+      filter:cls('grass','wood','farmland','wetland'), paint:{'fill-color':C.green, 'fill-opacity':.8}},
+    {id:'park', type:'fill', source:'om', 'source-layer':'park', paint:{'fill-color':C.green, 'fill-opacity':.8}},
+    {id:'water', type:'fill', source:'om', 'source-layer':'water', paint:{'fill-color':C.water}},
+    {id:'river', type:'line', source:'om', 'source-layer':'waterway', paint:{'line-color':C.water, 'line-width':w(1, 6)}},
+    {id:'bld', type:'fill', source:'om', 'source-layer':'building', minzoom:15, paint:{'fill-color':C.bld, 'fill-opacity':.7}},
+    {id:'rail', type:'line', source:'om', 'source-layer':'transportation', filter:cls('rail','transit'),
+      paint:{'line-color':C.rail, 'line-width':w(1, 4)}},
+    {id:'path', type:'line', source:'om', 'source-layer':'transportation', minzoom:15, filter:cls('path','track'),
+      paint:{'line-color':C.minor, 'line-width':w(.5, 3), 'line-opacity':.5}},
+    {id:'minor', type:'line', source:'om', 'source-layer':'transportation', filter:cls('minor','service'),
+      layout:{'line-cap':'round', 'line-join':'round'}, paint:{'line-color':C.minor, 'line-width':w(.6, 16)}},
+    {id:'major', type:'line', source:'om', 'source-layer':'transportation', filter:cls('primary','secondary','tertiary','trunk'),
+      layout:{'line-cap':'round', 'line-join':'round'}, paint:{'line-color':C.major, 'line-width':w(1.4, 26)}},
+    {id:'motor', type:'line', source:'om', 'source-layer':'transportation', filter:cls('motorway'),
+      layout:{'line-cap':'round', 'line-join':'round'}, paint:{'line-color':C.motor, 'line-width':w(2, 30)}}
+  ];
+  if (labels) {
+    const nm = ['coalesce', ['get', 'name:zh-Hant'], ['get', 'name:zh'], ['get', 'name']];
+    const txt = {'text-color':'#fff', 'text-halo-color':'#000', 'text-halo-width':1.6};
+    layers.push(
+      {id:'roadname', type:'symbol', source:'om', 'source-layer':'transportation_name', minzoom:14,
+        layout:{'symbol-placement':'line', 'text-field':nm, 'text-font':['Noto Sans Regular'], 'text-size':12}, paint:txt},
+      {id:'place', type:'symbol', source:'om', 'source-layer':'place',
+        layout:{'text-field':nm, 'text-font':['Noto Sans Regular'], 'text-size':['interpolate', ['linear'], ['zoom'], 8, 12, 14, 16]}, paint:txt});
+  }
+  return {version:8, glyphs:'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
+    sources:{om:{type:'vector', url:'https://tiles.openfreemap.org/planet'}}, layers};
+}
+let tileWarned = false;
+function warnTiles() { if (!tileWarned) { tileWarned = true; toast('地圖載入失敗：請用 Safari 開 https 網址，並確認網路', 5000); } }
+function addBase(map, el, labels) {
+  if (typeof maplibregl !== 'undefined' && L.maplibreGL) {
+    try {
+      const gl = L.maplibreGL({style: saStyle(labels), attribution: labels ? ATTR : '', interactive: false}).addTo(map);
+      setTimeout(() => { try { gl.getMaplibreMap().on('error', e => { if (!(e && e.error && e.error.status === 404)) warnTiles(); }); } catch (e) {} }, 0);
+      return;
+    } catch (e) {}
+  }
+  // fallback (no WebGL): OSM raster tinted brown
+  el.classList.add('raster');
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, attribution: labels ? ATTR : ''}).on('tileerror', warnTiles).addTo(map);
+}
+addBase(radar, $('#radar'), false);
+addBase(full, $('#full'), true);
 
 const mkRoute = map => [
   L.polyline([], {color:'#000', weight:11, opacity:.85, interactive:false}).addTo(map),
@@ -345,8 +408,8 @@ function updateStats(remain, prog) {
     const t = new Date(Date.now() + sec*1000);
     $('#etaV').textContent = t.toLocaleTimeString('zh-TW', {hour:'2-digit', minute:'2-digit', hour12:false});
   } else $('#etaV').textContent = '--:--';
-  $('#barHp i').style.width = (prog*100).toFixed(1) + '%';
-  $('#progLbl').textContent = `進度 ${Math.round(prog*100)}%`;
+  $('#ringHp').setAttribute('stroke-dasharray', (prog*100).toFixed(1) + ' 100');
+  $('#progLbl').lastChild.textContent = ` 進度 ${Math.round(prog*100)}%`;
 }
 
 function navTick() {
@@ -392,7 +455,7 @@ function update(p, hdg, kmh) {
   const z = mode === 'car' && speed > 60 ? 15 : MODES[mode].zoom;
   radar.setView(pos, z, {animate:false});
   meMarker.setLatLng(pos); meMarker.setIcon(arrowIcon(heading));
-  $('#barAr i').style.width = Math.min(100, speed / MODES[mode].max * 100).toFixed(1) + '%';
+  $('#ringAr').setAttribute('stroke-dasharray', Math.min(100, speed / MODES[mode].max * 100).toFixed(1) + ' 100');
   $('#spdLbl').textContent = Math.round(speed) + ' km/h';
   navTick();
 }
