@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#07090b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>GTA 導航</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Noto+Sans+TC:wght@500;700;900&display=swap">
+<style>
+/* Layout: one dark game screen — turn banner top, big round radar centre, HUD bars + controls bottom */
+:root{
+  --bg:#07090b;
+  --ink:#f2f2f2;
+  --muted:#8b97a0;
+  --route:#b45cff;      /* GTA waypoint purple */
+  --gold:#f2c230;       /* mission text */
+  --hp:#4fbd5a;         /* health-bar green */
+  --armor:#3d8fe0;      /* armor-bar blue */
+  --panel:rgba(0,0,0,.72);
+  --title:'Anton', 'Impact', 'Arial Narrow', sans-serif;
+  --ui:'Noto Sans TC', system-ui, -apple-system, sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0;overflow:hidden;background:var(--bg);color:var(--ink);font-family:var(--ui)}
+body{background:radial-gradient(120% 80% at 50% 55%,#16202a 0%,#07090b 70%)}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+
+#app{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;
+  padding:calc(env(safe-area-inset-top,0px) + 12px) 16px calc(env(safe-area-inset-bottom,0px) + 14px);gap:12px}
+
+/* turn banner */
+#banner{width:100%;max-width:520px;display:flex;align-items:center;gap:12px;background:var(--panel);
+  border-left:4px solid var(--route);padding:10px 14px;min-height:72px}
+#turnIcon{flex:none;width:46px;height:46px;transition:transform .3s}
+#turnDist{font-family:var(--title);font-size:34px;line-height:1;letter-spacing:.5px;font-variant-numeric:tabular-nums}
+#turnText{font-weight:700;font-size:15px;color:#d8d8d8;margin-top:3px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#bannerTxt{min-width:0;flex:1}
+
+/* top-right style stats */
+#stats{width:100%;max-width:520px;display:flex;justify-content:space-between;align-items:flex-end}
+.stat{font-family:var(--title);font-size:30px;line-height:1;-webkit-text-stroke:1.5px #000;paint-order:stroke fill;text-shadow:0 2px 0 #000}
+#remain{color:var(--hp)}
+#eta{color:var(--ink)}
+.statLbl{display:block;font-family:var(--ui);font-weight:700;font-size:11px;letter-spacing:.12em;color:var(--muted);-webkit-text-stroke:0;text-shadow:none;margin-bottom:4px}
+
+/* radar */
+#radarBox{flex:1;min-height:0;width:100%;display:flex;align-items:center;justify-content:center}
+#radarWrap{position:relative;width:min(92vw,52vh,480px);aspect-ratio:1;max-width:100%;border-radius:50%;
+  overflow:hidden;background:#1c2a26;box-shadow:0 0 0 5px #000,0 0 0 7px rgba(255,255,255,.08),0 18px 40px rgba(0,0,0,.6);cursor:pointer}
+#radarRot{position:absolute;width:150%;height:150%;left:-25%;top:-25%;will-change:transform}
+#radar{position:absolute;inset:0;background:#1c2a26}
+#radar .leaflet-tile-pane{filter:brightness(2.1) contrast(1.05) sepia(.5) hue-rotate(115deg) saturate(.55)}
+#radarWrap::after{content:"";position:absolute;inset:0;border-radius:50%;pointer-events:none;
+  background:radial-gradient(circle,transparent 62%,rgba(0,0,0,.45) 100%)}
+#player{position:absolute;left:50%;top:50%;width:30px;height:34px;transform:translate(-50%,-55%);z-index:500;pointer-events:none;filter:drop-shadow(0 1px 2px #000)}
+#north,#wpBlip{position:absolute;z-index:501;pointer-events:none;transform:translate(-50%,-50%)}
+#north{width:22px;height:22px;border-radius:50%;background:#000;color:#fff;font:700 12px/22px var(--ui);text-align:center;border:1.5px solid #fff}
+#wpBlip{width:20px;height:20px;display:none}
+#radarAttr{position:absolute;bottom:10%;left:0;right:0;text-align:center;font-size:9px;color:rgba(255,255,255,.45);z-index:502;pointer-events:none}
+
+/* bars */
+#bars{width:min(92vw,480px);display:grid;grid-template-columns:3fr 2fr;gap:6px}
+.bar{height:9px;background:rgba(0,0,0,.7);border:1.5px solid #000;position:relative}
+.bar i{position:absolute;inset:0 auto 0 0;width:0;transition:width .4s}
+#barHp i{background:var(--hp)} #barAr i{background:var(--armor)}
+#barLbl{width:min(92vw,480px);display:flex;justify-content:space-between;font-size:11px;color:var(--muted);letter-spacing:.08em;margin-top:-6px;font-variant-numeric:tabular-nums}
+
+/* controls */
+#ctrl{width:100%;max-width:520px;display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:8px}
+.btn{background:var(--panel);border:1.5px solid rgba(255,255,255,.15);padding:12px 6px;font-weight:900;font-size:15px;letter-spacing:.04em}
+.btn.on{border-color:var(--route);color:#fff;background:rgba(120,50,190,.45)}
+.btn:active{transform:scale(.97)}
+
+/* pause map */
+#pause{position:fixed;inset:0;z-index:1000;background:var(--bg);display:flex;flex-direction:column}
+#pauseTop{padding:calc(env(safe-area-inset-top,0px) + 10px) 16px 10px;background:linear-gradient(#000,rgba(0,0,0,.85));display:flex;flex-direction:column;gap:8px;z-index:2}
+#pauseHead{display:flex;align-items:baseline;justify-content:space-between}
+#pauseHead h1{margin:0;font-family:var(--title);font-weight:400;font-size:30px;letter-spacing:.06em}
+#pauseHead span{font-size:12px;color:var(--muted)}
+#searchRow{display:flex;gap:8px}
+#q{flex:1;min-width:0;background:#15191d;border:1.5px solid #2c3339;color:#fff;padding:11px 12px;font:500 16px var(--ui)}
+#qGo{background:var(--route);border:0;padding:0 16px;font-weight:900}
+#results{display:flex;flex-direction:column;max-height:40vh;overflow:auto}
+#results button{text-align:left;background:#101418;border:0;border-bottom:1px solid #20262b;padding:10px 12px;font-size:14px}
+#results button small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+#full{flex:1;background:#0e1114}
+#pauseBot{display:grid;grid-template-columns:1fr 1fr 1.4fr;gap:8px;padding:10px 16px calc(env(safe-area-inset-bottom,0px) + 12px);background:#000}
+.leaflet-container{font-family:var(--ui)}
+.leaflet-control-attribution{background:rgba(0,0,0,.6)!important;color:#999!important}
+.leaflet-control-attribution a{color:#bbb!important}
+
+/* toast + mission */
+#toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 90px);transform:translateX(-50%);z-index:2000;
+  background:rgba(0,0,0,.85);padding:10px 16px;font-weight:700;font-size:14px;max-width:calc(100% - 32px);text-align:center;opacity:0;transition:opacity .25s;pointer-events:none}
+#toast.show{opacity:1}
+#mission{position:fixed;inset:0;z-index:3000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+  background:linear-gradient(transparent 30%,rgba(0,0,0,.75) 45%,rgba(0,0,0,.75) 60%,transparent 75%);pointer-events:none;opacity:0;transition:opacity .5s}
+#mission.show{opacity:1}
+#mission b{font-family:var(--title);font-weight:400;font-size:clamp(40px,13vw,72px);color:var(--gold);-webkit-text-stroke:2px #000;paint-order:stroke fill;letter-spacing:.02em;text-shadow:0 3px 0 #000}
+#mission span{font-weight:900;font-size:18px;letter-spacing:.1em}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="banner">
+    <svg id="turnIcon" viewBox="0 0 48 48" aria-hidden="true"><path d="M24 4 L38 22 H29 V44 H19 V22 H10 Z" fill="#fff" stroke="#000" stroke-width="2" stroke-linejoin="round"/></svg>
+    <div id="bannerTxt">
+      <div id="turnDist">—</div>
+      <div id="turnText">點雷達打開地圖，設定導航點</div>
+    </div>
+  </div>
+
+  <div id="stats">
+    <div class="stat" id="remain"><span class="statLbl">剩餘距離</span><span id="remainV">0.0 km</span></div>
+    <div class="stat" id="eta" style="text-align:right"><span class="statLbl">預計抵達</span><span id="etaV">--:--</span></div>
+  </div>
+
+  <div id="radarBox">
+    <div id="radarWrap" role="button" tabindex="0" aria-label="打開地圖">
+      <div id="radarRot"><div id="radar"></div></div>
+      <svg id="player" viewBox="0 0 30 34" aria-hidden="true"><path d="M15 2 L28 31 L15 24 L2 31 Z" fill="#fff" stroke="#000" stroke-width="2" stroke-linejoin="round"/></svg>
+      <div id="north">N</div>
+      <svg id="wpBlip" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 1 L19 10 L10 19 L1 10 Z" fill="#b45cff" stroke="#000" stroke-width="2"/></svg>
+      <div id="radarAttr">© OpenStreetMap © CARTO</div>
+    </div>
+  </div>
+
+  <div id="bars"><div class="bar" id="barHp"><i></i></div><div class="bar" id="barAr"><i></i></div></div>
+  <div id="barLbl"><span id="progLbl">進度 0%</span><span id="spdLbl">0 km/h</span></div>
+
+  <div id="ctrl">
+    <button class="btn" id="bMap">地圖</button>
+    <button class="btn" id="bMode">開車</button>
+    <button class="btn" id="bSim">模擬</button>
+  </div>
+</div>
+
+<div id="pause" hidden>
+  <div id="pauseTop">
+    <div id="pauseHead"><h1>MAP</h1><span>點地圖任一處設定導航點</span></div>
+    <form id="searchRow"><input id="q" type="search" placeholder="搜尋地點或地址" autocomplete="off"><button id="qGo" type="submit">搜尋</button></form>
+    <div id="results"></div>
+  </div>
+  <div id="full"></div>
+  <div id="pauseBot">
+    <button class="btn" id="bMe">我的位置</button>
+    <button class="btn" id="bClear">清除</button>
+    <button class="btn on" id="bGo">開始導航</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+<div id="mission"><b>MISSION PASSED</b><span>已抵達目的地</span></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(() => {
+if (typeof L === 'undefined') {
+  document.getElementById('turnText').textContent = '地圖元件載入失敗：請用 https 網址在 Safari／Chrome 開啟';
+  return;
+}
+const $ = s => document.querySelector(s);
+const START = [53.7997, -1.5492];            // fallback when GPS is unavailable
+const RAD = Math.PI / 180, ER = 6371000;
+const MODES = {
+  car:  {label:'開車', svc:'routed-car',  off:45, sim:15,  max:120, zoom:16},
+  bike: {label:'單車', svc:'routed-bike', off:30, sim:5,   max:35,  zoom:17},
+  foot: {label:'步行', svc:'routed-foot', off:25, sim:1.5, max:8,   zoom:17}
+};
+const ORDER = ['car','bike','foot'];
+
+let mode = 'car';
+try { const m = localStorage.getItem('gtaNavMode'); if (MODES[m]) mode = m; } catch (e) {}
+let pos = START.slice(), lastPos = null, heading = 0, dispHeading = 0, speed = 0;
+let dest = null, route = null, nearIdx = 0, offCount = 0, lastRouteAt = 0, arrived = false;
+let sim = null, gotFix = false, routing = false;
+
+/* ---------- geometry ---------- */
+function dist(a, b) {
+  const dLat = (b[0]-a[0])*RAD, dLng = (b[1]-a[1])*RAD;
+  const h = Math.sin(dLat/2)**2 + Math.cos(a[0]*RAD)*Math.cos(b[0]*RAD)*Math.sin(dLng/2)**2;
+  return 2*ER*Math.asin(Math.min(1, Math.sqrt(h)));
+}
+function bearing(a, b) {
+  const y = Math.sin((b[1]-a[1])*RAD)*Math.cos(b[0]*RAD);
+  const x = Math.cos(a[0]*RAD)*Math.sin(b[0]*RAD) - Math.sin(a[0]*RAD)*Math.cos(b[0]*RAD)*Math.cos((b[1]-a[1])*RAD);
+  return (Math.atan2(y, x)/RAD + 360) % 360;
+}
+function segDist(p, a, b) {
+  const k = Math.cos(p[0]*RAD);
+  const ax = (a[1]-p[1])*k, ay = a[0]-p[0], dx = (b[1]-a[1])*k, dy = b[0]-a[0];
+  const L = dx*dx + dy*dy;
+  let t = L ? -(ax*dx + ay*dy)/L : 0; t = Math.max(0, Math.min(1, t));
+  const x = ax + t*dx, y = ay + t*dy;
+  return {d: Math.hypot(x, y)*111320, t};
+}
+const fmtDist = m => m >= 1000 ? (m/1000).toFixed(m >= 10000 ? 0 : 1) + ' km' : (Math.round(m/10)*10) + ' m';
+
+/* ---------- maps ---------- */
+const radar = L.map('radar', {zoomControl:false, attributionControl:false, dragging:false, touchZoom:false,
+  scrollWheelZoom:false, doubleClickZoom:false, boxZoom:false, keyboard:false, tap:false,
+  fadeAnimation:false, zoomAnimation:false, markerZoomAnimation:false}).setView(pos, MODES[mode].zoom);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png', {subdomains:'abcd', maxZoom:19}).addTo(radar);
+
+const full = L.map('full', {zoomControl:false}).setView(pos, 14);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+  {subdomains:'abcd', maxZoom:19, attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/attributions">CARTO</a> · 路線 FOSSGIS OSRM'}).addTo(full);
+
+const mkRoute = map => [
+  L.polyline([], {color:'#000', weight:11, opacity:.85, interactive:false}).addTo(map),
+  L.polyline([], {color:'#b45cff', weight:6, opacity:1, interactive:false}).addTo(map)
+];
+const radarLines = mkRoute(radar), fullLines = mkRoute(full);
+
+const arrowIcon = h => L.divIcon({className:'', iconSize:[26,30], iconAnchor:[13,15],
+  html:`<svg width="26" height="30" viewBox="0 0 30 34" style="transform:rotate(${h}deg);filter:drop-shadow(0 1px 2px #000)"><path d="M15 2 L28 31 L15 24 L2 31 Z" fill="#fff" stroke="#000" stroke-width="2"/></svg>`});
+const meMarker = L.marker(pos, {icon:arrowIcon(0), interactive:false}).addTo(full);
+const wpIcon = L.divIcon({className:'', iconSize:[28,28], iconAnchor:[14,14],
+  html:'<svg width="28" height="28" viewBox="0 0 20 20"><path d="M10 1 L19 10 L10 19 L1 10 Z" fill="#b45cff" stroke="#000" stroke-width="2"/></svg>'});
+let wpMarker = null;
+
+/* ---------- UI helpers ---------- */
+let toastT;
+function toast(msg, ms = 2600) {
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), ms);
+}
+function setBanner(dist, text, rot = 0, isRound = false) {
+  $('#turnDist').textContent = dist;
+  $('#turnText').textContent = text;
+  const ic = $('#turnIcon');
+  ic.innerHTML = isRound
+    ? '<circle cx="24" cy="24" r="12" fill="none" stroke="#fff" stroke-width="5"/><circle cx="24" cy="24" r="12" fill="none" stroke="#000" stroke-width="1"/><path d="M33 10 L40 18 L30 20 Z" fill="#fff" stroke="#000" stroke-width="1.5"/>'
+    : '<path d="M24 4 L38 22 H29 V44 H19 V22 H10 Z" fill="#fff" stroke="#000" stroke-width="2" stroke-linejoin="round"/>';
+  ic.style.transform = `rotate(${isRound ? 0 : rot}deg)`;
+}
+function idleBanner() { setBanner('—', '點雷達打開地圖，設定導航點'); }
+
+const TURN_ROT = {'left':-90,'slight left':-45,'sharp left':-135,'right':90,'slight right':45,'sharp right':135,'straight':0,'uturn':180};
+const TURN_TXT = {'left':'左轉','slight left':'稍向左','sharp left':'急左轉','right':'右轉','slight right':'稍向右','sharp right':'急右轉','straight':'直行','uturn':'迴轉'};
+function stepInfo(s) {
+  const m = s.maneuver, mod = m.modifier || 'straight', dir = TURN_TXT[mod] || '繼續';
+  let t, round = false;
+  switch (m.type) {
+    case 'depart': t = '出發'; break;
+    case 'arrive': t = '抵達目的地'; break;
+    case 'roundabout': case 'rotary': case 'roundabout turn':
+      t = `進入圓環，第 ${m.exit || 1} 個出口`; round = true; break;
+    case 'exit roundabout': case 'exit rotary': t = '離開圓環'; break;
+    case 'merge': t = '匯入車道'; break;
+    case 'fork': t = mod.includes('left') ? '岔路靠左' : '岔路靠右'; break;
+    case 'on ramp': t = '駛入匝道'; break;
+    case 'off ramp': t = '駛出匝道'; break;
+    case 'end of road': t = '路底' + dir; break;
+    case 'continue': case 'new name': t = mod === 'straight' ? '繼續直行' : dir; break;
+    default: t = dir;
+  }
+  const road = s.name || s.ref;
+  return {text: road && m.type !== 'arrive' ? `${t}・${road}` : t, rot: TURN_ROT[mod] ?? 0, round};
+}
+
+/* ---------- routing ---------- */
+async function getRoute(reason) {
+  if (!dest || routing) return;
+  routing = true; lastRouteAt = Date.now();
+  const svc = MODES[mode].svc;
+  const url = `https://routing.openstreetmap.de/${svc}/route/v1/driving/${pos[1]},${pos[0]};${dest[1]},${dest[0]}?overview=full&geometries=geojson&steps=true`;
+  try {
+    const r = await fetch(url);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+    if (j.code !== 'Ok' || !j.routes.length) throw new Error(j.code || 'no route');
+    const rt = j.routes[0];
+    const coords = rt.geometry.coordinates.map(c => [c[1], c[0]]);
+    const cum = [0];
+    for (let i = 1; i < coords.length; i++) cum.push(cum[i-1] + dist(coords[i-1], coords[i]));
+    const steps = rt.legs.flatMap(l => l.steps);
+    let k = 0;
+    steps.forEach(s => {               // index of each maneuver along the polyline
+      const loc = [s.maneuver.location[1], s.maneuver.location[0]];
+      let best = k, bd = Infinity;
+      for (let i = k; i < Math.min(coords.length, k + 400); i++) {
+        const d = dist(loc, coords[i]); if (d < bd) { bd = d; best = i; } if (d < 0.5) break;
+      }
+      s._idx = best; k = best;
+    });
+    route = {coords, cum, total: cum[cum.length-1], duration: rt.duration, steps};
+    nearIdx = 0; offCount = 0; arrived = false;
+    [...radarLines, ...fullLines].forEach(l => l.setLatLngs(coords));
+    if (reason === 'reroute') toast('已重新規劃路線');
+    navTick();
+  } catch (e) {
+    toast('路線規劃失敗：' + e.message + '，稍後再試');
+  } finally { routing = false; }
+}
+
+function setDest(latlng, label) {
+  dest = latlng;
+  if (wpMarker) wpMarker.setLatLng(dest); else wpMarker = L.marker(dest, {icon:wpIcon, interactive:false}).addTo(full);
+  stopSim(); arrived = false;
+  toast(label ? `導航點：${label}` : '已設定導航點');
+  getRoute();
+}
+function clearDest() {
+  dest = null; route = null; stopSim();
+  if (wpMarker) { full.removeLayer(wpMarker); wpMarker = null; }
+  [...radarLines, ...fullLines].forEach(l => l.setLatLngs([]));
+  idleBanner(); updateStats(0, 0);
+}
+
+/* ---------- navigation tick ---------- */
+function updateStats(remain, prog) {
+  $('#remainV').textContent = fmtDist(remain);
+  if (route && remain > 0) {
+    const sec = route.duration * (remain / route.total);
+    const t = new Date(Date.now() + sec*1000);
+    $('#etaV').textContent = t.toLocaleTimeString('zh-TW', {hour:'2-digit', minute:'2-digit', hour12:false});
+  } else $('#etaV').textContent = '--:--';
+  $('#barHp i').style.width = (prog*100).toFixed(1) + '%';
+  $('#progLbl').textContent = `進度 ${Math.round(prog*100)}%`;
+}
+
+function navTick() {
+  if (!route || arrived) return;
+  const c = route.coords;
+  let best = nearIdx, bd = Infinity, bt = 0;
+  const lo = Math.max(0, nearIdx - 10), hi = Math.min(c.length - 1, nearIdx + 150);
+  for (let i = lo; i < hi; i++) { const r = segDist(pos, c[i], c[i+1]); if (r.d < bd) { bd = r.d; best = i; bt = r.t; } }
+  if (bd > 200) for (let i = 0; i < c.length - 1; i++) { const r = segDist(pos, c[i], c[i+1]); if (r.d < bd) { bd = r.d; best = i; bt = r.t; } }
+  nearIdx = best;
+  const along = route.cum[best] + bt * (route.cum[best+1] - route.cum[best]);
+  const remain = Math.max(0, route.total - along);
+  updateStats(remain, route.total ? along / route.total : 0);
+
+  if (dist(pos, dest) < 25 || remain < 15) return arrive();
+
+  if (!sim && bd > MODES[mode].off) {
+    if (++offCount >= 3 && Date.now() - lastRouteAt > 8000) { offCount = 0; getRoute('reroute'); }
+  } else offCount = 0;
+
+  const next = route.steps.find(s => s._idx > best && s.maneuver.type !== 'depart') || route.steps[route.steps.length-1];
+  const toNext = Math.max(0, route.cum[next._idx] - along);
+  const info = stepInfo(next);
+  setBanner(fmtDist(toNext), info.text, info.rot, info.round);
+}
+
+function arrive() {
+  arrived = true; stopSim();
+  updateStats(0, 1);
+  setBanner('0 m', '抵達目的地');
+  const m = $('#mission'); m.classList.add('show');
+  try { navigator.vibrate && navigator.vibrate([120, 60, 120]); } catch (e) {}
+  setTimeout(() => { m.classList.remove('show'); clearDest(); }, 4200);
+}
+
+/* ---------- position updates ---------- */
+function update(p, hdg, kmh) {
+  lastPos = pos; pos = p;
+  if (hdg != null && !isNaN(hdg)) heading = hdg;
+  speed = kmh || 0;
+  const z = mode === 'car' && speed > 60 ? 15 : MODES[mode].zoom;
+  radar.setView(pos, z, {animate:false});
+  meMarker.setLatLng(pos); meMarker.setIcon(arrowIcon(heading));
+  $('#barAr i').style.width = Math.min(100, speed / MODES[mode].max * 100).toFixed(1) + '%';
+  $('#spdLbl').textContent = Math.round(speed) + ' km/h';
+  navTick();
+}
+
+function onGps(g) {
+  if (sim) return;
+  const p = [g.coords.latitude, g.coords.longitude];
+  const kmh = (g.coords.speed || 0) * 3.6;
+  let h = null;
+  if (g.coords.heading != null && !isNaN(g.coords.heading) && kmh > 3) h = g.coords.heading;
+  else if (gotFix && dist(pos, p) > 4) h = bearing(pos, p);
+  if (!gotFix) { gotFix = true; full.setView(p, 15); }
+  update(p, h, kmh);
+}
+if ('geolocation' in navigator) {
+  navigator.geolocation.watchPosition(onGps, err => {
+    if (!gotFix) toast(err.code === 1 ? '定位權限被拒，改用示範位置（可用模擬）' : '暫時拿不到 GPS，改用示範位置', 3500);
+  }, {enableHighAccuracy:true, maximumAge:1000, timeout:20000});
+} else toast('這個瀏覽器不支援定位');
+
+/* ---------- simulation ---------- */
+function stopSim() {
+  if (sim) { clearInterval(sim.timer); sim = null; }
+  $('#bSim').classList.remove('on'); $('#bSim').textContent = '模擬';
+}
+function startSim() {
+  if (!route) { toast('先在地圖上設定導航點'); return; }
+  const c = route.coords, v = MODES[mode].sim, boost = mode === 'car' ? 2 : 4;
+  sim = {i: Math.max(0, nearIdx), t: 0};
+  sim.timer = setInterval(() => {
+    let step = v * boost * 0.2;
+    while (step > 0 && sim.i < c.length - 1) {
+      const L = dist(c[sim.i], c[sim.i+1]) || 0.001, rem = L * (1 - sim.t);
+      if (step < rem) { sim.t += step / L; step = 0; } else { step -= rem; sim.i++; sim.t = 0; }
+    }
+    const a = c[Math.min(sim.i, c.length-1)], b = c[Math.min(sim.i+1, c.length-1)];
+    const p = [a[0] + (b[0]-a[0])*sim.t, a[1] + (b[1]-a[1])*sim.t];
+    update(p, a === b ? heading : bearing(a, b), v * 3.6);
+  }, 200);
+  $('#bSim').classList.add('on'); $('#bSim').textContent = '停止';
+}
+
+/* ---------- render loop: rotate radar heading-up ---------- */
+function frame() {
+  let d = ((heading - dispHeading + 540) % 360) - 180;
+  dispHeading = (dispHeading + d * 0.15 + 360) % 360;
+  $('#radarRot').style.transform = `rotate(${-dispHeading}deg)`;
+  const wrap = $('#radarWrap'), S = wrap.clientWidth, r = S/2, th = -dispHeading * RAD;
+  const n = $('#north');
+  n.style.left = (r + (r - 16) * Math.sin(th)) + 'px';
+  n.style.top  = (r - (r - 16) * Math.cos(th)) + 'px';
+  const blip = $('#wpBlip');
+  if (dest) {
+    const pt = radar.latLngToContainerPoint(dest), cs = radar.getSize();
+    let x = pt.x - cs.x/2, y = pt.y - cs.y/2;
+    const xr = x*Math.cos(th) - y*Math.sin(th), yr = x*Math.sin(th) + y*Math.cos(th);
+    const len = Math.hypot(xr, yr), lim = r - 14, k = len > lim ? lim/len : 1;
+    blip.style.display = 'block';
+    blip.style.left = (r + xr*k) + 'px'; blip.style.top = (r + yr*k) + 'px';
+  } else blip.style.display = 'none';
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+/* ---------- pause map + search ---------- */
+function openMap() {
+  $('#pause').hidden = false;
+  setTimeout(() => { full.invalidateSize(); if (!dest) full.setView(pos, Math.max(full.getZoom(), 14)); }, 30);
+}
+function closeMap() { $('#pause').hidden = true; $('#results').innerHTML = ''; setTimeout(() => radar.invalidateSize(), 30); }
+
+full.on('click', e => setDest([e.latlng.lat, e.latlng.lng]));
+$('#radarWrap').addEventListener('click', openMap);
+$('#radarWrap').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') openMap(); });
+$('#bMap').addEventListener('click', openMap);
+$('#bGo').addEventListener('click', () => { closeMap(); if (!dest) toast('還沒有導航點'); });
+$('#bClear').addEventListener('click', () => { clearDest(); toast('已清除導航點'); });
+$('#bMe').addEventListener('click', () => full.setView(pos, 16));
+$('#bSim').addEventListener('click', () => sim ? stopSim() : startSim());
+
+function paintMode() { $('#bMode').textContent = MODES[mode].label; }
+$('#bMode').addEventListener('click', () => {
+  mode = ORDER[(ORDER.indexOf(mode) + 1) % ORDER.length];
+  try { localStorage.setItem('gtaNavMode', mode); } catch (e) {}
+  paintMode(); stopSim();
+  if (dest) getRoute();
+  radar.setZoom(MODES[mode].zoom, {animate:false});
+  toast('交通方式：' + MODES[mode].label);
+});
+
+$('#searchRow').addEventListener('submit', async e => {
+  e.preventDefault();
+  const q = $('#q').value.trim(); if (!q) return;
+  const box = $('#results'); box.innerHTML = '<button disabled>搜尋中…</button>';
+  const vb = [pos[1]-0.5, pos[0]+0.5, pos[1]+0.5, pos[0]-0.5].join(',');
+  try {
+    const r = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&accept-language=zh-TW,en&viewbox=${vb}&q=${encodeURIComponent(q)}`);
+    const list = await r.json();
+    box.innerHTML = '';
+    if (!list.length) { box.innerHTML = '<button disabled>找不到這個地點，換個關鍵字試試</button>'; return; }
+    list.forEach(it => {
+      const b = document.createElement('button');
+      const parts = it.display_name.split(',');
+      const d = dist(pos, [+it.lat, +it.lon]);
+      b.innerHTML = `<span></span><small></small>`;
+      b.firstChild.textContent = parts[0];
+      b.lastChild.textContent = `${fmtDist(d)}・${parts.slice(1, 4).join(',').trim()}`;
+      b.addEventListener('click', () => {
+        const ll = [+it.lat, +it.lon];
+        box.innerHTML = ''; full.setView(ll, 15); setDest(ll, parts[0]);
+      });
+      box.appendChild(b);
+    });
+  } catch (err) { box.innerHTML = '<button disabled>搜尋失敗，請檢查網路</button>'; }
+});
+
+/* keep screen awake while navigating */
+async function wake() { try { if ('wakeLock' in navigator) await navigator.wakeLock.request('screen'); } catch (e) {} }
+document.addEventListener('click', wake, {once:true});
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') wake(); });
+window.addEventListener('resize', () => { radar.invalidateSize(); full.invalidateSize(); });
+
+paintMode(); idleBanner(); updateStats(0, 0);
+})();
+</script>
+</body>
+</html>
