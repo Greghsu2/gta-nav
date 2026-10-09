@@ -55,7 +55,8 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--gold);outline-o
   overflow:hidden;background:#1c2a26;box-shadow:0 0 0 5px #000,0 0 0 7px rgba(255,255,255,.08),0 18px 40px rgba(0,0,0,.6);cursor:pointer}
 #radarRot{position:absolute;width:150%;height:150%;left:-25%;top:-25%;will-change:transform}
 #radar{position:absolute;inset:0;background:#1c2a26}
-#radar .leaflet-tile-pane{filter:brightness(2.1) contrast(1.05) sepia(.5) hue-rotate(115deg) saturate(.55)}
+#radar .leaflet-tile-pane{filter:invert(1) grayscale(1) contrast(1.6) brightness(.75) sepia(.35) hue-rotate(90deg) saturate(.8)}
+#full .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.9) contrast(.95) saturate(.55)}
 #radarWrap::after{content:"";position:absolute;inset:0;border-radius:50%;pointer-events:none;
   background:radial-gradient(circle,transparent 62%,rgba(0,0,0,.45) 100%)}
 #player{position:absolute;left:50%;top:50%;width:30px;height:34px;transform:translate(-50%,-55%);z-index:500;pointer-events:none;filter:drop-shadow(0 1px 2px #000)}
@@ -72,7 +73,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--gold);outline-o
 #barLbl{width:min(92vw,480px);display:flex;justify-content:space-between;font-size:11px;color:var(--muted);letter-spacing:.08em;margin-top:-6px;font-variant-numeric:tabular-nums}
 
 /* controls */
-#ctrl{width:100%;max-width:520px;display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:8px}
+#ctrl{width:100%;max-width:520px;display:grid;grid-template-columns:1.2fr 1fr 1fr 1fr;gap:8px}
 .btn{background:var(--panel);border:1.5px solid rgba(255,255,255,.15);padding:12px 6px;font-weight:900;font-size:15px;letter-spacing:.04em}
 .btn.on{border-color:var(--route);color:#fff;background:rgba(120,50,190,.45)}
 .btn:active{transform:scale(.97)}
@@ -83,6 +84,19 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--gold);outline-o
 #pauseHead{display:flex;align-items:baseline;justify-content:space-between}
 #pauseHead h1{margin:0;font-family:var(--title);font-weight:400;font-size:30px;letter-spacing:.06em}
 #pauseHead span{font-size:12px;color:var(--muted)}
+#bSfx{background:none;border:1.5px solid rgba(255,255,255,.2);padding:4px 10px;font-weight:700;font-size:13px}
+#sfx{position:fixed;inset:0;z-index:1500;background:rgba(0,0,0,.92);display:flex;flex-direction:column;
+  padding:calc(env(safe-area-inset-top,0px) + 14px) 16px calc(env(safe-area-inset-bottom,0px) + 14px);gap:12px;overflow:auto}
+#sfx h2{margin:0;font-family:var(--title);font-weight:400;font-size:30px;letter-spacing:.06em;color:var(--gold)}
+#sfx p{margin:0;color:var(--muted);font-size:13px;line-height:1.6;max-width:60ch}
+.sfxRow{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;background:#101418;border:1px solid #20262b;padding:12px}
+.sfxRow b{display:block;font-size:15px}
+.sfxRow small{color:var(--muted);font-size:12px;overflow-wrap:anywhere}
+.sfxRow small.custom{color:var(--hp)}
+.sfxBtns{display:flex;gap:6px}
+.sfxBtns button,.sfxBtns label{background:#1b2127;border:1px solid #2c3339;padding:8px 10px;font-weight:700;font-size:13px;cursor:pointer;color:var(--ink)}
+.sfxBtns input{display:none}
+#sfxClose{margin-top:auto}
 #searchRow{display:flex;gap:8px}
 #q{flex:1;min-width:0;background:#15191d;border:1.5px solid #2c3339;color:#fff;padding:11px 12px;font:500 16px var(--ui)}
 #qGo{background:var(--route);border:0;padding:0 16px;font-weight:900}
@@ -128,7 +142,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--gold);outline-o
       <svg id="player" viewBox="0 0 30 34" aria-hidden="true"><path d="M15 2 L28 31 L15 24 L2 31 Z" fill="#fff" stroke="#000" stroke-width="2" stroke-linejoin="round"/></svg>
       <div id="north">N</div>
       <svg id="wpBlip" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 1 L19 10 L10 19 L1 10 Z" fill="#b45cff" stroke="#000" stroke-width="2"/></svg>
-      <div id="radarAttr">© OpenStreetMap © CARTO</div>
+      <div id="radarAttr">© OpenStreetMap</div>
     </div>
   </div>
 
@@ -139,12 +153,13 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--gold);outline-o
     <button class="btn" id="bMap">地圖</button>
     <button class="btn" id="bMode">開車</button>
     <button class="btn" id="bSim">模擬</button>
+    <button class="btn" id="bSnd" aria-pressed="false">靜音</button>
   </div>
 </div>
 
 <div id="pause" hidden>
   <div id="pauseTop">
-    <div id="pauseHead"><h1>MAP</h1><span>點地圖任一處設定導航點</span></div>
+    <div id="pauseHead"><h1>MAP</h1><span>點地圖任一處設定導航點</span><button id="bSfx" type="button">音效設定</button></div>
     <form id="searchRow"><input id="q" type="search" placeholder="搜尋地點或地址" autocomplete="off"><button id="qGo" type="submit">搜尋</button></form>
     <div id="results"></div>
   </div>
@@ -156,6 +171,12 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--gold);outline-o
   </div>
 </div>
 
+<div id="sfx" hidden>
+  <h2>SOUND</h2>
+  <p>每個提示音都可以換成你手機裡的音檔（mp3、m4a、wav）。檔案只存在這支手機的瀏覽器裡，不會上傳。沒有選的就用內建音效。</p>
+  <div id="sfxList"></div>
+  <button class="btn" id="sfxClose" type="button">完成</button>
+</div>
 <div id="toast"></div>
 <div id="mission"><b>MISSION PASSED</b><span>已抵達目的地</span></div>
 
@@ -207,11 +228,11 @@ const fmtDist = m => m >= 1000 ? (m/1000).toFixed(m >= 10000 ? 0 : 1) + ' km' : 
 const radar = L.map('radar', {zoomControl:false, attributionControl:false, dragging:false, touchZoom:false,
   scrollWheelZoom:false, doubleClickZoom:false, boxZoom:false, keyboard:false, tap:false,
   fadeAnimation:false, zoomAnimation:false, markerZoomAnimation:false}).setView(pos, MODES[mode].zoom);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png', {subdomains:'abcd', maxZoom:19}).addTo(radar);
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19}).on('tileerror', () => { if (!window._tileWarned) { window._tileWarned = 1; toast('地圖圖磚載入失敗：請用 Safari 開 https 網址，不要在 App 預覽裡開', 5000); } }).addTo(radar);
 
 const full = L.map('full', {zoomControl:false}).setView(pos, 14);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-  {subdomains:'abcd', maxZoom:19, attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/attributions">CARTO</a> · 路線 FOSSGIS OSRM'}).addTo(full);
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+  {maxZoom:19, attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · 路線 FOSSGIS OSRM'}).addTo(full);
 
 const mkRoute = map => [
   L.polyline([], {color:'#000', weight:11, opacity:.85, interactive:false}).addTo(map),
@@ -292,9 +313,10 @@ async function getRoute(reason) {
       s._idx = best; k = best;
     });
     route = {coords, cum, total: cum[cum.length-1], duration: rt.duration, steps};
-    nearIdx = 0; offCount = 0; arrived = false;
+    nearIdx = 0; offCount = 0; arrived = false; spoken = {};
     [...radarLines, ...fullLines].forEach(l => l.setLatLngs(coords));
-    if (reason === 'reroute') toast('已重新規劃路線');
+    if (reason === 'reroute') { toast('已重新規劃路線'); beep('reroute'); say('重新規劃路線', 450); }
+    else { beep('route'); say('路線已規劃，全長' + spokenDist(route.total), 500); }
     navTick();
   } catch (e) {
     toast('路線規劃失敗：' + e.message + '，稍後再試');
@@ -349,9 +371,11 @@ function navTick() {
   const toNext = Math.max(0, route.cum[next._idx] - along);
   const info = stepInfo(next);
   setBanner(fmtDist(toNext), info.text, info.rot, info.round);
+  announce(route.steps.indexOf(next), toNext, info.text);
 }
 
 function arrive() {
+  beep('pass'); say('已抵達目的地', 2600);
   arrived = true; stopSim();
   updateStats(0, 1);
   setBanner('0 m', '抵達目的地');
@@ -491,7 +515,214 @@ document.addEventListener('click', wake, {once:true});
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') wake(); });
 window.addEventListener('resize', () => { radar.invalidateSize(); full.invalidateSize(); });
 
-paintMode(); idleBanner(); updateStats(0, 0);
+/* ---------- sound: voice prompts, synthesized HUD sounds, custom files ---------- */
+// sndMode: 'voice' = 語音+音效, 'fx' = 只有音效 (like GTA V, no voice), 'off'
+let sndMode = 'voice', actx = null, spoken = {}, master = null, verb = null;
+try { const m = localStorage.getItem('gtaNavSnd'); if (['voice','fx','off'].includes(m)) sndMode = m; } catch (e) {}
+const SLOTS = {turn:'轉彎提示', route:'設定導航點／路線規劃好', reroute:'重新規劃路線', pass:'抵達目的地'};
+const custom = {};   // kind -> {buf, name}
+const THRESH = {car:[800, 300, 60], bike:[300, 100, 30], foot:[150, 50, 15]};
+
+function ctx() {
+  if (!actx) {
+    actx = new (window.AudioContext || window.webkitAudioContext)();
+    master = actx.createGain(); master.gain.value = .9; master.connect(actx.destination);
+    // small synthetic room reverb
+    verb = actx.createConvolver();
+    const len = actx.sampleRate * 1.6, ir = actx.createBuffer(2, len, actx.sampleRate);
+    for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < len; i++) d[i] = (Math.random()*2-1) * Math.pow(1 - i/len, 3); }
+    verb.buffer = ir;
+    const wet = actx.createGain(); wet.gain.value = .28; verb.connect(wet).connect(master);
+  }
+  if (actx.state === 'suspended') actx.resume();
+  return actx;
+}
+function spokenDist(m) {
+  if (m >= 1000) return (m/1000).toFixed(m >= 10000 ? 0 : 1).replace(/\.0$/, '') + '公里';
+  return (m >= 100 ? Math.round(m/50)*50 : Math.round(m/10)*10) + '公尺';
+}
+function say(text, delay = 0) {
+  if (sndMode !== 'voice' || !('speechSynthesis' in window)) return;
+  setTimeout(() => {
+    try {
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'zh-TW'; u.rate = 1.05;
+      const vs = speechSynthesis.getVoices();
+      const v = vs.find(v => /zh[-_]TW/i.test(v.lang)) || vs.find(v => /^zh/i.test(v.lang));
+      if (v) u.voice = v;
+      speechSynthesis.speak(u);
+    } catch (e) {}
+  }, delay);
+}
+
+/* one voice of the synth: oscillator -> filter -> amp envelope -> dry + reverb */
+function tone(t0, {f, f2, type = 'sine', dur = .15, vol = .2, cut = 4000, cut2, q = 1, det = 0, wet = true}) {
+  const a = actx, o = a.createOscillator(), fl = a.createBiquadFilter(), g = a.createGain();
+  o.type = type; o.detune.value = det;
+  o.frequency.setValueAtTime(f, t0);
+  if (f2) o.frequency.exponentialRampToValueAtTime(f2, t0 + dur * .8);
+  fl.type = 'lowpass'; fl.Q.value = q; fl.frequency.setValueAtTime(cut, t0);
+  if (cut2) fl.frequency.exponentialRampToValueAtTime(cut2, t0 + dur);
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(vol, t0 + .012);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  o.connect(fl).connect(g); g.connect(master); if (wet) g.connect(verb);
+  o.start(t0); o.stop(t0 + dur + .05);
+}
+function thump(t0, vol = .5) {   // sub-bass hit
+  tone(t0, {f: 110, f2: 38, type: 'sine', dur: .5, vol, cut: 400, wet: false});
+}
+function noiseHit(t0, dur = .25, vol = .15, cut = 3000) {
+  const a = actx, n = a.createBuffer(1, a.sampleRate * dur, a.sampleRate), d = n.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random()*2-1) * (1 - i/d.length);
+  const src = a.createBufferSource(), fl = a.createBiquadFilter(), g = a.createGain();
+  src.buffer = n; fl.type = 'bandpass'; fl.frequency.value = cut; g.gain.value = vol;
+  src.connect(fl).connect(g); g.connect(master); g.connect(verb); src.start(t0);
+}
+const SYNTH = {
+  // short low HUD blip with a pitch drop
+  turn(t) { tone(t, {f: 620, f2: 380, type: 'triangle', dur: .13, vol: .32, cut: 2500});
+            tone(t + .11, {f: 620, f2: 380, type: 'triangle', dur: .13, vol: .26, cut: 2500}); },
+  // soft rising two-tone "waypoint set"
+  route(t) { tone(t, {f: 392, type: 'sine', dur: .14, vol: .3, cut: 3000});
+             tone(t + .1, {f: 587, type: 'sine', dur: .28, vol: .3, cut: 3000});
+             tone(t + .1, {f: 1175, type: 'sine', dur: .2, vol: .06}); },
+  // falling pair, slightly dissonant
+  reroute(t) { tone(t, {f: 523, type: 'square', dur: .12, vol: .12, cut: 1600});
+               tone(t + .14, {f: 415, type: 'square', dur: .2, vol: .12, cut: 1400}); },
+  // heavy synth-brass stab, then a held resolving chord with a filter sweep
+  pass(t) {
+    thump(t, .6); noiseHit(t, .3, .18, 1800);
+    const stab = [233.1, 293.7, 349.2, 466.2];          // Bb chord
+    stab.forEach(f => [-9, 9].forEach(det => tone(t, {f, type: 'sawtooth', dur: .32, vol: .07, cut: 3500, cut2: 600, q: 4, det})));
+    const t2 = t + .38;
+    thump(t2, .55); noiseHit(t2, .4, .12, 2500);
+    const hold = [261.6, 329.6, 392, 523.3, 659.3];      // C major, held
+    hold.forEach(f => [-12, 0, 12].forEach(det => tone(t2, {f, type: 'sawtooth', dur: 2.2, vol: .05, cut: 700, cut2: 4200, q: 3, det})));
+    tone(t2, {f: 65.4, type: 'sawtooth', dur: 2.2, vol: .18, cut: 300});
+  }
+};
+function beep(kind) {
+  if (sndMode === 'off') return;
+  try {
+    ctx();
+    const t = actx.currentTime + .02;
+    if (custom[kind]) {
+      const src = actx.createBufferSource(); src.buffer = custom[kind].buf; src.connect(master); src.start(t);
+    } else SYNTH[kind] && SYNTH[kind](t);
+  } catch (e) {}
+}
+function announce(stepIdx, toNext, text) {
+  if (sndMode === 'off' || stepIdx < 0) return;
+  const th = THRESH[mode];
+  for (let i = th.length - 1; i >= 0; i--) {
+    if (toNext <= th[i]) {
+      const key = stepIdx + ':' + i;
+      if (spoken[key]) return;
+      for (let j = 0; j <= i; j++) spoken[stepIdx + ':' + j] = 1;   // never replay farther prompts
+      const plain = text.replace('・', '，進入');
+      if (i === th.length - 1) { beep('turn'); say(plain, 250); }
+      else if (sndMode === 'voice') say(spokenDist(toNext) + '後，' + plain);
+      return;
+    }
+  }
+}
+const SND_LABEL = {voice:'語音', fx:'音效', off:'靜音'};
+function paintSnd() {
+  const b = $('#bSnd'); b.textContent = SND_LABEL[sndMode];
+  b.classList.toggle('on', sndMode !== 'off'); b.setAttribute('aria-pressed', sndMode !== 'off');
+}
+$('#bSnd').addEventListener('click', () => {
+  sndMode = {voice:'fx', fx:'off', off:'voice'}[sndMode];
+  try { localStorage.setItem('gtaNavSnd', sndMode); } catch (e) {}
+  paintSnd();
+  try { speechSynthesis.cancel(); } catch (e) {}
+  if (sndMode === 'voice') { beep('route'); say('語音導航開啟', 300); toast('語音＋音效'); }
+  else if (sndMode === 'fx') { beep('turn'); toast('只有音效，不講話'); }
+  else toast('靜音');
+});
+
+/* ---- custom sound files, kept in this browser's IndexedDB ---- */
+let idb = null;
+function openDb() {
+  return new Promise(res => {
+    try {
+      const q = indexedDB.open('gtaNavSfx', 1);
+      q.onupgradeneeded = () => q.result.createObjectStore('sfx');
+      q.onsuccess = () => { idb = q.result; res(idb); };
+      q.onerror = () => res(null);
+    } catch (e) { res(null); }
+  });
+}
+function dbOp(fn) {
+  return new Promise(res => {
+    if (!idb) return res(null);
+    try { const tx = idb.transaction('sfx', 'readwrite'), st = tx.objectStore('sfx'), q = fn(st); q.onsuccess = () => res(q.result); q.onerror = () => res(null); }
+    catch (e) { res(null); }
+  });
+}
+async function loadCustom(kind, rec) {
+  try {
+    ctx();
+    const ab = await rec.blob.arrayBuffer();
+    const buf = await new Promise((ok, bad) => actx.decodeAudioData(ab, ok, bad));
+    custom[kind] = {buf, name: rec.name};
+    return true;
+  } catch (e) { return false; }
+}
+async function initCustom() {
+  await openDb();
+  for (const kind of Object.keys(SLOTS)) {
+    const rec = await dbOp(st => st.get(kind));
+    if (rec && rec.blob) await loadCustom(kind, rec);
+  }
+  paintSfx();
+}
+function paintSfx() {
+  const list = $('#sfxList'); list.innerHTML = '';
+  Object.entries(SLOTS).forEach(([kind, label]) => {
+    const row = document.createElement('div'); row.className = 'sfxRow';
+    const c = custom[kind];
+    row.innerHTML = `<div><b></b><small></small></div>
+      <div class="sfxBtns"><button type="button" data-a="play">試聽</button>
+      <label>選擇<input type="file" accept="audio/*" id="sfxFile-${kind}"></label>
+      ${c ? '<button type="button" data-a="clear">還原</button>' : ''}</div>`;
+    row.querySelector('b').textContent = label;
+    const sm = row.querySelector('small');
+    sm.textContent = c ? '自訂：' + c.name : '內建音效';
+    if (c) sm.className = 'custom';
+    row.querySelector('[data-a="play"]').addEventListener('click', () => {
+      const prev = sndMode; if (sndMode === 'off') sndMode = 'fx'; beep(kind); sndMode = prev;
+    });
+    row.querySelector('input').addEventListener('change', async e => {
+      const f = e.target.files[0]; if (!f) return;
+      if (f.size > 8 * 1024 * 1024) { toast('檔案太大，請用 8MB 以下的音檔'); return; }
+      const rec = {blob: f, name: f.name};
+      if (await loadCustom(kind, rec)) {
+        await dbOp(st => st.put(rec, kind));
+        paintSfx(); beep(kind); toast('已套用：' + f.name);
+      } else toast('這個檔案無法播放，換成 mp3 或 m4a 試試');
+    });
+    const clr = row.querySelector('[data-a="clear"]');
+    if (clr) clr.addEventListener('click', async () => {
+      delete custom[kind]; await dbOp(st => st.delete(kind)); paintSfx(); toast('已還原內建音效');
+    });
+    list.appendChild(row);
+  });
+}
+$('#bSfx').addEventListener('click', () => { $('#sfx').hidden = false; ctx(); });
+$('#sfxClose').addEventListener('click', () => { $('#sfx').hidden = true; });
+
+/* iOS only allows audio after a tap: unlock both engines on the first touch */
+document.addEventListener('click', () => {
+  try { ctx(); } catch (e) {}
+  try { if ('speechSynthesis' in window) { const u = new SpeechSynthesisUtterance(''); u.volume = 0; speechSynthesis.speak(u); } } catch (e) {}
+}, {once: true, capture: true});
+try { speechSynthesis.getVoices(); speechSynthesis.onvoiceschanged = () => {}; } catch (e) {}
+initCustom();
+
+paintMode(); paintSnd(); idleBanner(); updateStats(0, 0);
 })();
 </script>
 </body>
